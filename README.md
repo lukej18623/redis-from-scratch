@@ -1,8 +1,9 @@
 # Redis Server
 
 A minimal Redis server implemented from scratch in Go: a RESP protocol
-parser/serializer, a handful of commands (`PING`, `SET`, `GET`, `HSET`,
-`HGET`, `HGETALL`), and an append-only file (AOF) for persistence.
+parser/serializer, a handful of commands (`PING`, `SET`, `GET`, `DEL`,
+`EXPIRE`, `TTL`, `HSET`, `HGET`, `HGETALL`), and an append-only file (AOF)
+for persistence.
 
 ## Running
 
@@ -13,7 +14,18 @@ go run .
 The server listens on `:6379` and speaks the standard RESP protocol, so it
 can be driven with `redis-cli` or `nc`. On startup it replays `database.aof`
 (created in the working directory) to restore state, then keeps appending
-`SET`/`HSET` commands to that file as they're executed.
+`SET`/`HSET`/`DEL` commands to that file as they're executed.
+
+## Testing
+
+```
+go test ./...
+```
+
+Includes unit tests for the RESP parser/marshaler and command handlers, plus
+an integration test (`main_test.go`) that drives the real `handleConnection`
+over a `net.Pipe` with two pipelined commands in a single write — a
+regression test for bug #1 below.
 
 ## Project layout
 
@@ -83,8 +95,9 @@ of range` and take down the connection's goroutine.
 
 ## Known limitations (not fixed, out of scope for this pass)
 
-- Only `SET`/`HSET` are persisted to the AOF; other mutating commands would
-  need the same treatment if added.
+- `EXPIRE` is not persisted to the AOF (only `SET`/`HSET`/`DEL` are), so TTLs
+  set before a restart are lost on replay — the key itself survives with no
+  expiry.
 - The AOF is replayed and appended to without ever being compacted/rewritten,
   so it grows unbounded over long-running processes.
-- No expiry (`EXPIRE`/`TTL`) support.
+- `EXPIRE`/`TTL` only apply to string keys (`SET`), not hashes.
