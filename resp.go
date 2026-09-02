@@ -111,9 +111,17 @@ func (r *Resp) readBulk() (Value, error) {
 		return v, err
 	}
 
+	if len < 0 {
+		// RESP null bulk string ($-1\r\n)
+		v.typ = "null"
+		return v, nil
+	}
+
 	bulk := make([]byte, len)
 
-	r.reader.Read(bulk)
+	if _, err := io.ReadFull(r.reader, bulk); err != nil {
+		return v, err
+	}
 
 	v.bulk = string(bulk)
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"strings"
 )
@@ -16,20 +17,50 @@ func main() {
 		return
 	}
 
-	// Listen for connections
-	conn, err := l.Accept()
+	aof, err := NewAof("database.aof")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	defer aof.Close()
 
-	defer conn.Close()
+	aof.Read(func(value Value) {
+		command := strings.ToUpper(value.array[0].bulk)
+		args := value.array[1:]
 
+		handler, ok := Handlers[command]
+		if !ok {
+			fmt.Println("Invalid command: ", command)
+			return
+		}
+
+		handler(args)
+	})
+
+
+	// Listen for connections
 	for {
-		resp := NewResp(conn)
-		value, err := resp.Read()
+		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println(err)
+			continue
+		}
+
+		go handleConnection(conn, aof)
+	}
+}
+
+func handleConnection(conn net.Conn, aof *Aof) {
+	defer conn.Close()
+
+	resp := NewResp(conn)
+
+	for {
+		value, err := resp.Read()
+		if err != nil {
+			if err != io.EOF {
+				fmt.Println(err)
+			}
 			return
 		}
 
@@ -53,6 +84,10 @@ func main() {
 			fmt.Println("Invalid command: ", command)
 			writer.Write(Value{typ: "string", str: ""})
 			continue
+		}
+
+		if command == "SET" || command == "HSET" {
+			aof.Write(value)
 		}
 
 		result := handler(args)
