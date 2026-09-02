@@ -1,4 +1,4 @@
-# redis-from-scratch
+# Redis Server
 
 A minimal Redis server implemented from scratch in Go: a RESP protocol
 parser/serializer, a handful of commands (`PING`, `SET`, `GET`, `HSET`,
